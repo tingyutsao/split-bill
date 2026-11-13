@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一起分帳 POC — 聚餐旅遊分帳計算器</title>
+<style>
+  :root{
+    --bg:#f2f4f8; --panel:#ffffff; --line:#e4e7ee; --text:#1d2433; --muted:#68738a;
+    --primary:#2563eb; --primary-soft:#eaf1ff; --green:#0e9f6e; --green-soft:#e6f7f1;
+    --red:#dc2626; --red-soft:#fdecec; --amber:#b45309; --amber-soft:#fff4dc;
+    --radius:14px; --shadow:0 1px 3px rgba(20,30,60,.08),0 8px 24px rgba(20,30,60,.06);
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:15px;line-height:1.5}
+  .wrap{max-width:1080px;margin:0 auto;padding:16px 14px 60px}
+  header.app{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  h1{font-size:22px;margin:0;letter-spacing:.5px}
+  h1 .badge{display:inline-block;vertical-align:3px;margin-left:8px;font-size:11px;color:var(--primary);
+    background:var(--primary-soft);border:1px solid #caddff;padding:2px 8px;border-radius:99px;font-weight:600}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .totals{text-align:right;font-size:13px;color:var(--muted)}
+  .totals b{display:block;font-size:22px;color:var(--text)}
+  .layout{display:grid;grid-template-columns:1fr;gap:16px}
+  @media(min-width:900px){
+    .layout{grid-template-columns:minmax(0,1fr) 360px;align-items:start}
+  }
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:16px;margin-bottom:16px}
+  @media(min-width:900px){ .summary-col .panel{position:sticky;top:12px;margin-bottom:0} }
+  .panel h2{font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .panel h2 .n{color:var(--muted);font-weight:500;font-size:13px}
+  .hint{color:var(--muted);font-size:12px;margin:2px 0 10px}
+  /* ── 人員 ── */
+  .members{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 12px;border:1px solid var(--line);
+    background:#fff;border-radius:99px;font-weight:600;font-size:14px}
+  .chip button{border:0;background:transparent;cursor:pointer;color:var(--muted);width:20px;height:20px;
+    border-radius:50%;font-size:13px;line-height:1}
+  .chip button:hover{background:var(--red-soft);color:var(--red)}
+  .member-add{display:flex;gap:8px;flex:1;min-width:180px}
+  input,select,button{font-family:inherit;font-size:14px}
+  input[type=text],input[type=number]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:9px;
+    background:#fff;color:var(--text)}
+  input:focus{outline:2px solid #bcd2ff;border-color:var(--primary)}
+  input[type=number]{-moz-appearance:textfield}
+  input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  /* ── 按鈕 ── */
+  .btn{border:1px solid var(--line);background:#fff;color:var(--text);padding:8px 14px;border-radius:9px;
+    cursor:pointer;font-weight:600;transition:.15s}
+  .btn:hover{border-color:#c9cfdd;background:#f8fafc}
+  .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn-primary:hover{background:#1d4fd7;border-color:#1d4fd7}
+  .btn-sm{padding:4px 10px;font-size:13px;border-radius:8px}
+  .btn-danger{color:var(--red);border-color:#f3c4c4}
+  .btn-danger:hover{background:var(--red-soft);border-color:var(--red)}
+  .btn-ghost{border-style:dashed;color:var(--muted)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  /* ── 表單 ── */
+  .form-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+  .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .subbox{border:1px solid var(--line);border-radius:10px;padding:10px}
+  .subbox .boxtitle{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .boxtitle b{font-size:13px}
+  .toggle{display:flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .toggle label{padding:5px 10px;font-size:12px;cursor:pointer;color:var(--muted);background:#fff}
+  .toggle input{display:none}
+  .toggle input:checked+span{color:var(--primary);font-weight:700}
+  .toggle label:has(input:checked){background:var(--primary-soft)}
+  .pick{display:flex;flex-wrap:wrap;gap:6px}
+  .pick .opt{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:9px;
+    padding:5px 9px;cursor:pointer;user-select:none;background:#fff;font-size:14px}
+  .pick .opt:has(input:checked){background:var(--primary-soft);border-color:var(--primary);color:var(--primary);font-weight:700}
+  .pick input{display:none}
+  .pick .mini{width:76px;padding:4px 6px;font-size:13px}
+  .payline{display:flex;gap:6px;align-items:center;margin-top:6px}
+  .payline .who{font-weight:700;font-size:13px;min-width:3.2em}
+  .err{color:var(--red);font-size:12px;margin-top:6px;font-weight:600}
+  .actions{display:flex;gap:8px;margin-top:4px}
+  /* ── 品項卡 ── */
+  .item{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:#fdfdff}
+  .item.invalid{border-color:#f5b5b5;background:#fffafa}
+  .item-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .item-top .name{font-weight:700;font-size:15px}
+  .item-top .amt{font-weight:800;font-size:16px;color:var(--primary);white-space:nowrap}
+  .item-meta{margin-top:6px;display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)}
+  .item-meta .k{font-weight:700;margin-right:4px}
+  .names b{color:var(--text)}
+  .item .ops{display:flex;gap:6px;margin-top:8px}
+  .warnline{color:var(--red);font-size:12px;margin-top:6px;font-weight:600}
+  /* ── 摘要 ── */
+  .dayline{display:flex;justify-content:space-between;padding:9px 2px;border-bottom:1px dashed var(--line);
+    font-size:14px;gap:8px}
+  .dayline:last-of-type{border-bottom:0}
+  .dayline .who{font-weight:700;display:flex;align-items:center;gap:6px;min-width:0}
+  .dayline .who .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .dayline .sm{color:var(--muted);font-size:12px}
+  .net{font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .net.plus{color:var(--green)} .net.minus{color:var(--red)} .net.zero{color:var(--muted);font-weight:600}
+  .tag{font-size:10.5px;padding:1px 7px;border-radius:99px;font-weight:700}
+  .tag.plus{background:var(--green-soft);color:var(--green)}
+  .tag.minus{background:var(--red-soft);color:var(--red)}
+  .tag.zero{background:#eef0f5;color:var(--muted)}
+  .trans{background:#f8fafc;border:1px dashed #cdd5e3;border-radius:12px;padding:12px;margin-top:6px}
+  .trans .t{display:flex;justify-content:space-between;gap:8px;padding:5px 0;font-size:14px}
+  .trans .t b{color:var(--text)}
+  .trans .amt{font-weight:800;color:var(--amber)}
+  .trans .note{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .summary-ops{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+  .empty{color:var(--muted);text-align:center;padding:22px 10px;font-size:14px;border:1px dashed var(--line);
+    border-radius:12px;background:#fbfcfe}
+  .empty .big{font-size:30px;display:block;margin-bottom:4px}
+  /* ── 其他 ── */
+  .foot{margin-top:6px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#111827;
+    color:#fff;padding:10px 18px;border-radius:99px;font-size:13.5px;opacity:0;pointer-events:none;transition:.25s;z-index:50}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .fab{position:fixed;right:16px;bottom:18px;background:var(--primary);color:#fff;border:0;border-radius:99px;
+    padding:12px 18px;font-weight:700;font-size:14px;box-shadow:0 6px 18px rgba(37,99,235,.35);cursor:pointer;display:none}
+  @media(max-width:899px){ .fab{display:block} }
+  @media print{ .fab,.summary-ops,.members .member-add{display:none!important} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="app">
+    <div>
+      <h1>💰 一起分帳 <span class="badge">POC 雛型</span></h1>
+      <div class="sub">聚餐、旅遊分帳好幫手 —— 輸入品項與付款人，自動算出每個人該付／該收多少</div>
+    </div>
+    <div class="totals"><span>總支出</span><b id="total-amt">NT$0</b></div>
+  </header>
+
+  <div class="layout">
+    <!-- 左欄 -->
+    <div>
+      <section class="panel">
+        <h2>👥 參與成員 <span class="n" id="member-count"></span></h2>
+        <div class="hint">先加入一起消費的人，點名字可改名，✕ 可移除（會同步從品項中移除）。</div>
+        <div id="members" class="members"></div>
+      </section>
+
+      <section class="panel">
+        <h2 id="form-title">➕ 新增品項</h2>
+        <div class="form-grid">
+          <div class="two">
+            <div class="field">
+              <label>品項名稱</label>
+              <input type="text" id="f-name" placeholder="例如：火鍋套餐／來回高鐵票" maxlength="30">
+            </div>
+            <div class="field">
+              <label>金額（NT$）</label>
+              <input type="number" id="f-amount" min="0" step="0.01" inputmode="decimal" placeholder="0">
+            </div>
+          </div>
+          <div class="subbox">
+            <div class="boxtitle">
+              <b>💳 誰付錢</b>
+              <span id="payer-mode-toggle" class="toggle" style="display:none">
+                <label><input type="radio" name="paymode" value="even" checked><span>平均付</span></label>
+                <label><input type="radio" name="paymode" value="custom"><span>個別金額</span></label>
+              </span>
+            </div>
+            <div id="payer-pick" class="pick"></div>
+            <div id="payer-amounts"></div>
+            <div id="payer-note" class="hint" style="margin:6px 0 0">可選多人（例如 A、B 各出一半）。</div>
+          </div>
+          <div class="subbox">
+            <div class="boxtitle">
+              <b>🧮 誰要分攤</b>
+              <span class="toggle">
+                <label><input type="radio" name="sharemode" value="equal" checked><span>平均</span></label>
+                <label><input type="radio" name="sharemode" value="percent"><span>百分比</span></label>
+                <label><input type="radio" name="sharemode" value="weight"><span>份數</span></label>
+              </span>
+            </div>
+            <div id="share-pick" class="pick"></div>
+            <div id="share-config"></div>
+            <div id="share-note" class="hint" style="margin:6px 0 0">平均：每人均攤；百分比：總和需 100%；份數：依權重比例。</div>
+          </div>
+          <div id="form-err" class="err" style="display:none"></div>
+          <div class="actions">
+            <button class="btn btn-primary" id="f-save" type="button">新增品項</button>
+            <button class="btn" id="f-cancel" type="button" style="display:none">取消編輯</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>🧾 消費品項 <span class="n" id="item-count"></span></h2>
+        <div id="items" style="margin-top:8px"></div>
+      </section>
+    </div>
+
+    <!-- 右欄：結算摘要 -->
+    <aside class="summary-col">
+      <section class="panel" id="summary-panel">
+        <h2>📊 結算摘要 <span class="n" id="sum-date"></span></h2>
+        <div class="hint">「淨額」＝ 已付金額 − 應分攤金額。正數代表可收回，負數代表要補給別人。</div>
+        <div id="balances" style="margin-top:8px"></div>
+        <h2 style="margin-top:16px">🔁 轉帳建議 <span class="n">（已合併最少筆）</span></h2>
+        <div class="hint">把多筆互相欠的錢化簡成最少筆轉帳，照這樣轉就兩兩結清。</div>
+        <div id="transfers" style="margin-top:8px"></div>
+        <div class="summary-ops">
+          <button class="btn" id="btn-copy" type="button">📋 複製結果</button>
+          <button class="btn" id="btn-png" type="button">🖼 匯出圖片</button>
+          <button class="btn btn-ghost" id="btn-sample" type="button">✨ 填入範例資料</button>
+          <button class="btn btn-danger btn-ghost" id="btn-clear" type="button">🗑 清除全部</button>
+        </div>
+        <div class="hint foot">🔒 資料僅保存於此裝置的瀏覽器（localStorage），不會上傳。</div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<button class="fab" id="fab" type="button">📊 看結算</button>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ========= 狀態 ========= */
+const LS_KEY = "split-bill-poc-v1";
+let state = { members: [], items: [] };
+let editingId = null;      // 正在編輯的品項 id
+let formMembers = new Set(); // 表單：誰付錢
+let shareMembers = new Set(); // 表單：誰分攤
+
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + "-" + Math.random().toString(36).slice(2));
+const $ = s => document.querySelector(s);
+const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+const fmt = n => "$" + round2(n).toLocaleString("zh-TW", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const near = (a, b, t = 0.02) => Math.abs(a - b) <= t;
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 1800);
+}
+function saveState() { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} }
+function loadState() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) { const d = JSON.parse(raw); if (d && Array.isArray(d.members) && Array.isArray(d.items)) return d; }
+  } catch (e) {}
+  return null;
+}
+
+/* ========= 成員 ========= */
+function memberName(id) { const m = state.members.find(x => x.id === id); return m ? m.name : "(已移除)"; }
+function memberIdByName(name) {
+  const m = state.members.find(x => x.name.trim() === name.trim());
+  return m ? m.id : null;
+}
+function renameMember(id) {
+  const m = state.members.find(x => x.id === id); if (!m) return;
+  const nn = prompt("修改成員名稱：", m.name);
+  if (nn == null) return;
+  const t = nn.trim();
+  if (!t) return toast("名稱不可空白");
+  if (state.members.some(x => x.id !== id && x.name === t)) return toast("已有相同名稱的成員");
+  m.name = t; commit();
+}
+
+/* ========= 計算 ========= */
+// 回傳 {ok, msg, share: Map(mid→金額)}：該品項每人「應分攤」
+function shareOf(item) {
+  const sh = item.shares || {};
+  const list = (sh.list || []).filter(p => state.members.some(m => m.id === p.mid));
+  if (!list.length) return { ok: false, msg: "沒有任何分攤成員" };
+  const A = round2(item.amount);
+  if (!(A > 0)) return { ok: false, msg: "金額無效" };
+  const map = new Map();
+  if (sh.mode === "percent") {
+    const sum = list.reduce((s, p) => s + (+p.val || 0), 0);
+    if (!near(sum, 100)) return { ok: false, msg: "百分比總和 ≠ 100%（目前 " + round2(sum) + "%）" };
+    let used = 0;
+    list.forEach((p, i) => {
+      let v = i === list.length - 1 ? round2(A - used) : round2(A * (+p.val || 0) / 100);
+      used = round2(used + v); map.set(p.mid, v);
+    });
+  } else if (sh.mode === "weight") {
+    const sumW = list.reduce((s, p) => s + Math.max(0, +p.val || 0), 0);
+    if (sumW <= 0) return { ok: false, msg: "份數總和必須大於 0" };
+    let used = 0;
+    list.forEach((p, i) => {
+      let v = i === list.length - 1 ? round2(A - used) : round2(A * Math.max(0, +p.val || 0) / sumW);
+      used = round2(used + v); map.set(p.mid, v);
+    });
+  } else { // equal
+    let used = 0;
+    list.forEach((p, i) => {
+      let v = i === list.length - 1 ? round2(A - used) : round2(A / list.length);
+      used = round2(used + v); map.set(p.mid, v);
+    });
+  }
+  return { ok: true, share: map };
+}
+// 回傳 {ok,msg,pay: Map(mid→金額)}：該品項每人「實際付款」
+function payOf(item) {
+  const A = round2(item.amount);
+  if (!(A > 0)) return { ok: false, msg: "金額無效" };
+  const payers = (item.payers || []).filter(p => state.members.some(m => m.id === p.mid));
+  if (!payers.length) return { ok: false, msg: "沒有任何付款人" };
+  const map = new Map();
+  if (item.payerCustom) {
+    let sum = 0;
+    for (const p of payers) { const v = +p.amount || 0; map.set(p.mid, round2(v)); sum = round2(sum + v); }
+    if (!near(sum, A)) return { ok: false, msg: "個別付款金額總和 ≠ 品項金額（" + fmt(sum) + " ≠ " + fmt(A) + "）" };
+  } else {
+    let used = 0;
+    payers.forEach((p, i) => {
+      let v = i === payers.length - 1 ? round2(A - used) : round2(A / payers.length);
+      used = round2(used + v); map.set(p.mid, v);
+    });
+  }
+  return { ok: true, pay: map };
+}
+// 全域結算
+function computeAll() {
+  const paid = new Map(), owed = new Map();
+  state.members.forEach(m => { paid.set(m.id, 0); owed.set(m.id, 0); });
+  let validTotal = 0, validCount = 0;
+  const invalid = [];
+  for (const it of state.items) {
+    const ps = payOf(it), ss = shareOf(it);
+    if (!ps.ok || !ss.ok) { invalid.push({ item: it, reason: ps.ok ? ss.msg : ps.msg }); continue; }
+    validTotal = round2(validTotal + round2(it.amount)); validCount++;
+    ps.pay.forEach((v, mid) => paid.set(mid, round2(paid.get(mid) + v)));
+    ss.share.forEach((v, mid) => owed.set(mid, round2(owed.get(mid) + v)));
+  }
+  const balances = state.members.map(m => ({
+    id: m.id, name: m.name,
+    paid: paid.get(m.id), owed: owed.get(m.id),
+    net: round2(paid.get(m.id) - owed.get(m.id))
+  })).filter(b => Math.abs(b.paid) > 0.005 || Math.abs(b.owed) > 0.005 || state.members.length <= 1);
+  // 債務簡化（貪心：最大債權 ↔ 最大債務）
+  const cred = balances.filter(b => b.net > 0.005).map(b => ({ ...b, left: b.net })).sort((a, b) => b.left - a.left);
+  const debt = balances.filter(b => b.net < -0.005).map(b => ({ ...b, left: -b.net })).sort((a, b) => b.left - a.left);
+  const transfers = [];
+  let i = 0, j = 0;
+  while (i < debt.length && j < cred.length) {
+    const amt = round2(Math.min(debt[i].left, cred[j].left));
+    if (amt > 0.005) transfers.push({ from: debt[i].name, to: cred[j].name, amt });
+    debt[i].left = round2(debt[i].left - amt);
+    cred[j].left = round2(cred[j].left - amt);
+    if (debt[i].left <= 0.005) i++;
+    if (cred[j].left <= 0.005) j++;
+  }
+  return { validTotal, validCount, invalid, balances: state.members.map(m => {
+    const b = balances.find(x => x.id === m.id);
+    return b || { id: m.id, name: m.name, paid: 0, owed: 0, net: 0 };
+  }), transfers };
+}
+
+/* ========= 渲染：人員 ========= */
+function renderMembers() {
+  const box = $("#members");
+  const chips = state.members.map(m =>
+    `<span class="chip" title="點名字可改名">${esc(m.name)}<button data-act="rename" data-id="${m.id}" type="button">✎</button><button data-act="del" data-id="${m.id}" type="button">✕</button></span>`
+  ).join("");
+  box.innerHTML = chips + `
+    <span class="member-add">
+      <input type="text" id="new-member" placeholder="輸入成員名字" maxlength="12" style="min-width:120px">
+      <button class="btn btn-sm btn-primary" data-act="add-member" type="button">＋加入</button>
+    </span>`;
+  $("#member-count").textContent = state.members.length ? `（${state.members.length} 人）` : "（尚未加入）";
+  const inp = $("#new-member");
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addMember(); } });
+}
+
+/* ========= 表單 ========= */
+function shareModeNow() { return document.querySelector('input[name="sharemode"]:checked')?.value || "equal"; }
+function payModeNow() { return document.querySelector('input[name="paymode"]:checked')?.value || "even"; }
+
+function renderFormPickers() {
+  const names = state.members;
+  // 誰付錢
+  $("#payer-pick").innerHTML = names.length ? names.map(m => `
+    <label class="opt"><input type="checkbox" data-pick="payer" value="${m.id}" ${formMembers.has(m.id) ? "checked" : ""}>${esc(m.name)}</label>`).join("")
+    : `<span class="hint" style="margin:0">請先在上方加入成員</span>`;
+  const multi = formMembers.size >= 2;
+  $("#payer-mode-toggle").style.display = multi ? "" : "none";
+  // 個別金額輸入
+  const pm = payModeNow();
+  $("#payer-amounts").innerHTML = (multi && pm === "custom")
+    ? [...formMembers].map(mid => `
+      <div class="payline"><span class="who">${esc(memberName(mid))}</span>
+        <input type="number" class="mini" data-payer-amt="${mid}" min="0" step="0.01" inputmode="decimal"
+          placeholder="0" value="${(form._payerAmt && form._payerAmt.get(mid)) ?? ""}"></div>`).join("")
+    : "";
+  $("#payer-note").textContent = formMembers.size === 0 ? "可選多人（例如 A、B 各出一半）。"
+    : formMembers.size === 1 ? `${memberName([...formMembers][0])} 支付全部款項。`
+    : pm === "custom" ? "請輸入每人實際支付金額（總和需等於品項金額）。"
+    : `${[...formMembers].length} 人平均支付這筆款項。`;
+  // 誰分攤
+  $("#share-pick").innerHTML = names.length ? names.map(m => `
+    <label class="opt"><input type="checkbox" data-pick="share" value="${m.id}" ${shareMembers.has(m.id) ? "checked" : ""}>${esc(m.name)}</label>`).join("")
+    : `<span class="hint" style="margin:0">請先在上方加入成員</span>`;
+  // 分攤模式設定
+  const sm = shareModeNow();
+  let cfg = "";
+  if (sm === "percent" && shareMembers.size) {
+    cfg = [...shareMembers].map(mid => `
+      <div class="payline"><span class="who">${esc(memberName(mid))}</span>
+        <input type="number" class="mini" data-share-pct="${mid}" min="0" max="100" step="0.1" inputmode="decimal" placeholder="%" value="${(form._pct && form._pct.get(mid)) ?? ""}"></div>`).join("") +
+      `<div class="hint" id="pct-sum" style="margin:6px 0 0"></div>`;
+  } else if (sm === "weight" && shareMembers.size) {
+    cfg = [...shareMembers].map(mid => `
+      <div class="payline"><span class="who">${esc(memberName(mid))}</span>
+        <input type="number" class="mini" data-share-w="${mid}" min="0" step="0.5" inputmode="decimal" placeholder="份數" value="${(form._wt && form._wt.get(mid)) ?? ""}"></div>`);
+  } else if (sm === "equal" && shareMembers.size) {
+    const amt = +$("#f-amount").value || 0;
+    cfg = amt > 0 ? `<div class="hint" style="margin:6px 0 0">每人約 ${fmt(amt / shareMembers.size)}（以結算時優先出整數）</div>` : "";
+  }
+  $("#share-config").innerHTML = cfg;
+  if (sm === "percent" && shareMembers.size) updatePctSum();
+}
+
+const form = { _payerAmt: new Map(), _pct: new Map(), _wt: new Map() };
+
+function syncPickBoxes() {
+  // 把右上支票的顯示補上
+  document.querySelectorAll('#payer-pick input').forEach(i => i.checked = formMembers.has(i.value));
+  document.querySelectorAll('#share-pick input').forEach(i => i.checked = shareMembers.has(i.value));
+}
+function updatePctSum() {
+  let sum = 0; document.querySelectorAll("[data-share-pct]").forEach(i => sum += +i.value || 0);
+  const el = document.getElementById("pct-sum");
+  if (el) { el.textContent = `目前總計：${round2(sum)}%（需等於 100%）`; el.style.color = near(sum, 100, 0.05) ? "var(--green)" : "var(--red)"; }
+}
+
+function resetForm() {
+  editingId = null; formMembers.clear(); shareMembers.clear();
+  form._payerAmt.clear(); form._pct.clear(); form._wt.clear();
+  $("#f-name").value = ""; $("#f-amount").value = "";
+  document.querySelector('input[name="paymode"][value="even"]').checked = true;
+  document.querySelector('input[name="sharemode"][value="equal"]').checked = true;
+  $("#form-title").textContent = "➕ 新增品項";
+  $("#f-save").textContent = "新增品項";
+  $("#f-cancel").style.display = "none";
+  $("#form-err").style.display = "none";
+  renderFormPickers();
+}
+function loadToForm(item) {
+  editingId = item.id;
+  formMembers = new Set(item.payers.map(p => p.mid));
+  shareMembers = new Set(item.shares.list.map(p => p.mid));
+  form._payerAmt.clear(); form._pct.clear(); form._wt.clear();
+  (item.payers || []).forEach(p => { if (p.amount != null) form._payerAmt.set(p.mid, p.amount); });
+  (item.shares.list || []).forEach(p => { if (p.val != null) form._pct.set(p.mid, p.val); });
+  $("#f-name").value = item.name; $("#f-amount").value = item.amount;
+  document.querySelector(`input[name="paymode"][value="${item.payerCustom ? "custom" : "even"}"]`).checked = true;
+  document.querySelector(`input[name="sharemode"][value="${item.shares.mode}"]`).checked = true;
+  $("#form-title").textContent = "✏️ 編輯品項";
+  $("#f-save").textContent = "儲存變更";
+  $("#f-cancel").style.display = "";
+  renderFormPickers();
+  syncPickBoxes();
+  $("#form-title").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function saveForm() {
+  const name = $("#f-name").value.trim();
+  const amount = round2(+$("#f-amount").value);
+  const err = m => { const e = $("#form-err"); e.textContent = "⚠ " + m; e.style.display = ""; };
+  $("#form-err").style.display = "none";
+  if (!name) return err("請輸入品項名稱");
+  if (!(amount > 0)) return err("請輸入大於 0 的金額");
+  if (!formMembers.size) return err("請至少選擇一位付款人");
+  if (!shareMembers.size) return err("請至少選擇一位分攤成員");
+  const payerCustom = formMembers.size >= 2 && payModeNow() === "custom";
+  let payers = [...formMembers].map(mid => ({
+    mid,
+    amount: payerCustom ? round2(+((document.querySelector(`[data-payer-amt="${mid}"]`)?.value) ?? form._payerAmt.get(mid) ?? 0)) : null
+  }));
+  if (payerCustom) {
+    const sum = round2(payers.reduce((s, p) => s + (p.amount || 0), 0));
+    if (!near(sum, amount)) return err(`個別付款金額總和 ${fmt(sum)} 需等於品項金額 ${fmt(amount)}`);
+  }
+  const sm = shareModeNow();
+  let shares;
+  if (sm === "percent") {
+    const list = [...shareMembers].map(mid => ({ mid, val: round2(+((document.querySelector(`[data-share-pct="${mid}"]`)?.value) ?? form._pct.get(mid) ?? 0)) }));
+    const sum = round2(list.reduce((s, p) => s + p.val, 0));
+    if (!near(sum, 100, 0.05)) return err(`百分比總和為 ${sum}%，需等於 100%`);
+    shares = { mode: "percent", list };
+  } else if (sm === "weight") {
+    const list = [...shareMembers].map(mid => ({ mid, val: +((document.querySelector(`[data-share-w="${mid}"]`)?.value) ?? form._wt.get(mid) ?? 1) }));
+    if (list.reduce((s, p) => s + Math.max(0, p.val || 0), 0) <= 0) return err("份數總和必須大於 0");
+    shares = { mode: "weight", list };
+  } else {
+    shares = { mode: "equal", list: [...shareMembers].map(mid => ({ mid })) };
+  }
+  if (editingId) {
+    const it = state.items.find(x => x.id === editingId);
+    Object.assign(it, { name, amount, payers, payerCustom, shares });
+    toast("已更新品項");
+  } else {
+    state.items.push({ id: uid(), name, amount, payers, payerCustom, shares });
+    toast("已新增品項");
+  }
+  resetForm(); commit();
+}
+
+/* ========= 渲染：品項 ========= */
+function shareDescripton(it) {
+  const list = (it.shares.list || []).filter(p => state.members.some(m => m.id === p.mid));
+  if (!list.length) return "無分攤成員";
+  if (it.shares.mode === "equal") return `平均分攤 · ${list.map(p => `<b>${esc(memberName(p.mid))}</b>`).join("、")}`;
+  if (it.shares.mode === "percent") return `依百分比 · ${list.map(p => `<b>${esc(memberName(p.mid))}</b> ${round2(p.val || 0)}%`).join("、")}`;
+  return `依份數 · ${list.map(p => `<b>${esc(memberName(p.mid))}</b> ${p.val ?? "-"}`).join("、")}`;
+}
+function renderItems() {
+  const box = $("#items");
+  $("#item-count").textContent = state.items.length ? `（${state.items.length} 筆）` : "";
+  if (!state.items.length) {
+    box.innerHTML = `<div class="empty"><span class="big">🍽️</span>還沒有任何品項<br>用上方表單加入第一筆消費，或點「填入範例資料」快速看看效果。</div>`;
+    return;
+  }
+  const calc = computeAll();
+  const invalidMap = new Map(calc.invalid.map(x => [x.item.id, x.reason]));
+  box.innerHTML = state.items.map(it => {
+    const bad = invalidMap.get(it.id);
+    const payers = (it.payers || []).filter(p => state.members.some(m => m.id === p.mid));
+    const payDesc = payers.length === 0 ? "無付款人"
+      : it.payerCustom ? payers.map(p => `<b>${esc(memberName(p.mid))}</b> ${fmt(p.amount || 0)}`).join("、")
+      : `${payers.map(p => `<b>${esc(memberName(p.mid))}</b>`).join("、")}（${payers.length > 1 ? "平均支付" : "支付全額"}）`;
+    return `<div class="item ${bad ? "invalid" : ""}">
+      <div class="item-top">
+        <span class="name">${esc(it.name)}</span>
+        <span class="amt">${fmt(it.amount)}</span>
+      </div>
+      <div class="item-meta">
+        <div class="names"><span class="k">💳 付款</span>${payDesc}</div>
+        <div class="names"><span class="k">🧮 分攤</span>${shareDescripton(it)}</div>
+      </div>
+      ${bad ? `<div class="warnline">⚠ 尚無法計算：${esc(bad)}</div>` : ""}
+      <div class="ops">
+        <button class="btn btn-sm" data-act="edit" data-id="${it.id}" type="button">✏️ 編輯</button>
+        <button class="btn btn-sm btn-danger" data-act="del-item" data-id="${it.id}" type="button">🗑 刪除</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ========= 渲染：結算 ========= */
+function renderSummary() {
+  const calc = computeAll();
+  $("#total-amt").textContent = fmt(calc.validTotal);
+  $("#sum-date").textContent = new Date().toLocaleDateString("zh-TW", { year: "numeric", month: "numeric", day: "numeric" });
+  const colors = ["#2563eb", "#0e9f6e", "#d97706", "#7c3aed", "#db2777", "#0891b2", "#65a30d", "#e11d48"];
+  const cm = new Map(calc.balances.map((b, i) => [b.id, colors[i % colors.length]]));
+  const bEl = $("#balances");
+  if (!state.members.length) bEl.innerHTML = `<div class="empty"><span class="big">👋</span>先加入成員吧</div>`;
+  else bEl.innerHTML = calc.balances.map(b => {
+    const cls = b.net > 0.005 ? "plus" : b.net < -0.005 ? "minus" : "zero";
+    const tag = cls === "plus" ? "收款" : cls === "minus" ? "付款" : "兩清";
+    const val = cls === "plus" ? `+${fmt(b.net)}` : cls === "minus" ? `−${fmt(-b.net)}` : fmt(0);
+    return `<div class="dayline">
+      <span class="who"><span class="dot" style="background:${cm.get(b.id)}"></span>${esc(b.name)}
+        <span class="sm">付${fmt(b.paid)} · 攤${fmt(b.owed)}</span></span>
+      <span class="net ${cls}">${val} <span class="tag ${cls}">${tag}</span></span>
+    </div>`;
+  }).join("");
+  const tEl = $("#transfers");
+  if (!calc.transfers.length) {
+    tEl.innerHTML = `<div class="empty" style="padding:14px">${state.items.length ? "🎉 目前一筆都不用轉，每個人剛好兩清！" : "加入品項後會顯示誰該轉帳給誰。"}</div>`;
+  } else {
+    tEl.innerHTML = `<div class="trans">${calc.transfers.map(t =>
+      `<div class="t"><span><b>${esc(t.from)}</b> → <b>${esc(t.to)}</b></span><span class="amt">${fmt(t.amt)}</span></div>`).join("")}
+      <div class="note">共 ${calc.transfers.length} 筆即可全部結清。</div></div>`;
+  }
+}
+
+/* ========= 匯出 ========= */
+function summaryText() {
+  const calc = computeAll();
+  const lines = ["🧾 一起分帳 · 結算摘要", `日期：${new Date().toLocaleDateString("zh-TW")}`,
+    `總支出：${fmt(calc.validTotal)}（共 ${calc.validCount} 筆品項）`, "", "—— 每人淨額 ——"];
+  calc.balances.forEach(b => {
+    const s = b.net > 0.005 ? `可收 ${fmt(b.net)}` : b.net < -0.005 ? `應付 ${fmt(-b.net)}` : "已兩清";
+    lines.push(`${b.name}｜付 ${fmt(b.paid)} 攤 ${fmt(b.owed)}｜${s}`);
+  });
+  lines.push("", "—— 轉帳建議 ——");
+  if (calc.transfers.length) calc.transfers.forEach(t => lines.push(`${t.from} → ${t.to}：${fmt(t.amt)}`));
+  else lines.push("無需轉帳，大家已結清。");
+  return lines.join("\n");
+}
+async function copySummary() {
+  const text = summaryText();
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("✅ 結算結果已複製，貼到群組吧！");
+  } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); toast("✅ 已複製"); } catch (e2) { toast("複製失敗，請手動選取"); }
+    ta.remove();
+  }
+}
+function exportPNG() {
+  const calc = computeAll();
+  const colors = ["#2563eb", "#0e9f6e", "#d97706", "#7c3aed", "#db2777", "#0891b2", "#65a30d", "#e11d48"];
+  const W = 720, pad = 36;
+  const balN = calc.balances.length, trN = calc.transfers.length;
+  const H = 150 + balN * 44 + (trN ? 60 + trN * 38 : 50) + 30;
+  const cv = document.createElement("canvas"); const dpr = Math.min(devicePixelRatio || 1, 2);
+  cv.width = W * dpr; cv.height = H * dpr;
+  const c = cv.getContext("2d"); c.scale(dpr, dpr);
+  const F = 'system-ui,"Microsoft JhengHei","PingFang TC",sans-serif';
+  c.fillStyle = "#f2f4f8"; c.fillRect(0, 0, W, H);
+  // 卡片
+  c.fillStyle = "#fff"; c.strokeStyle = "#e4e7ee";
+  c.beginPath(); c.roundRect(16, 16, W - 32, H - 32, 16); c.fill(); c.stroke();
+  let y = 56;
+  c.fillStyle = "#111827"; c.font = `700 24px ${F}`;
+  c.fillText("💰 一起分帳 · 結算摘要", pad, y); y += 26;
+  c.fillStyle = "#68738a"; c.font = `13px ${F}`;
+  c.fillText(new Date().toLocaleDateString("zh-TW") + `　總支出 ${fmt(calc.validTotal)}（${calc.validCount} 筆品項）`, pad, y); y += 24;
+  calc.balances.forEach((b, i) => {
+    const cls = b.net > 0.005 ? "+" : b.net < -0.005 ? "−" : "±";
+    c.fillStyle = colors[i % colors.length]; c.beginPath(); c.arc(pad + 5, y - 5, 5, 0, 7); c.fill();
+    c.fillStyle = "#111827"; c.font = `600 16px ${F}`;
+    c.fillText(b.name, pad + 18, y);
+    c.fillStyle = "#68738a"; c.font = `12px ${F}`;
+    c.fillText(`付 ${fmt(b.paid)} · 攤 ${fmt(b.owed)}`, pad + 18, y + 16);
+    c.textAlign = "right"; c.font = `700 16px ${F}`;
+    c.fillStyle = b.net > 0.005 ? "#0e9f6e" : b.net < -0.005 ? "#dc2626" : "#68738a";
+    c.fillText(cls === "±" ? fmt(0) : cls + fmt(Math.abs(b.net)), W - pad, y);
+    c.textAlign = "left"; y += 44;
+  });
+  y += 6;
+  c.fillStyle = "#111827"; c.font = `700 17px ${F}`;
+  c.fillText(trN ? `🔁 轉帳建議（合併為 ${trN} 筆）` : "🔁 目前無需轉帳", pad, y); y += 26;
+  calc.transfers.forEach(t => {
+    c.font = `15px ${F}`; c.fillStyle = "#1d2433";
+    c.fillText(`${t.from} → ${t.to}`, pad + 8, y);
+    c.textAlign = "right"; c.font = `700 15px ${F}`; c.fillStyle = "#b45309";
+    c.fillText(fmt(t.amt), W - pad - 8, y); c.textAlign = "left"; y += 38;
+  });
+  c.fillStyle = "#9aa3b5"; c.font = `11px ${F}`;
+  c.fillText("由「一起分帳 POC」產生", pad, H - 30);
+  const a = document.createElement("a");
+  a.download = "結算摘要.png"; a.href = cv.toDataURL("image/png"); a.click();
+  toast("🖼 圖片已下載");
+}
+
+/* ========= 事件 ========= */
+function addMember() {
+  const inp = $("#new-member"); const n = inp.value.trim();
+  if (!n) return;
+  if (state.members.some(m => m.name === n)) { toast("已有相同名稱"); return; }
+  state.members.push({ id: uid(), name: n });
+  inp.value = ""; commit(); renderFormPickers();
+  $("#new-member")?.focus?.();
+}
+function removeMember(id) {
+  const m = state.members.find(x => x.id === id); if (!m) return;
+  if (!confirm(`移除「${m.name}」？\n（該成員也會從所有品項的付款／分攤名單中移除）`)) return;
+  state.members = state.members.filter(x => x.id !== id);
+  state.items.forEach(it => {
+    it.payers = (it.payers || []).filter(p => p.mid !== id);
+    it.shares.list = (it.shares.list || []).filter(p => p.mid !== id);
+  });
+  commit(); renderFormPickers();
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-act]"); if (!t) return;
+  const id = t.dataset.id;
+  switch (t.dataset.act) {
+    case "add-member": addMember(); break;
+    case "rename": renameMember(id); break;
+    case "del": removeMember(id); break;
+    case "edit": { const it = state.items.find(x => x.id === id); if (it) loadToForm(it); break; }
+    case "del-item":
+      if (confirm("刪除這筆品項？")) {
+        state.items = state.items.filter(x => x.id !== id);
+        if (editingId === id) resetForm();
+        commit(); renderFormPickers();
+      } break;
+  }
+});
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (el.matches('[data-pick="payer"]')) {
+    if (el.checked) formMembers.add(el.value); else { formMembers.delete(el.value); form._payerAmt.delete(el.value); }
+    if (formMembers.size < 2) document.querySelector('input[name="paymode"][value="even"]').checked = true;
+    renderFormPickers(); syncPickBoxes();
+  } else if (el.matches('[data-pick="share"]')) {
+    if (el.checked) shareMembers.add(el.value); else { shareMembers.delete(el.value); form._pct.delete(el.value); form._wt.delete(el.value); }
+    renderFormPickers(); syncPickBoxes();
+  } else if (el.name === "paymode" || el.name === "sharemode") {
+    renderFormPickers(); syncPickBoxes();
+  } else if (el.matches("[data-payer-amt]")) { form._payerAmt.set(el.dataset.payerAmt, +el.value || 0); }
+  else if (el.matches("[data-share-pct]")) { form._pct.set(el.dataset.sharePct, +el.value || 0); updatePctSum(); }
+  else if (el.matches("[data-share-w]")) { form._wt.set(el.dataset.shareW, +el.value || 0); }
+});
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (el.id === "f-amount" && shareModeNow() === "equal") renderFormPickers();
+  if (el.matches("[data-share-pct]")) updatePctSum();
+});
+$("#f-save").addEventListener("click", saveForm);
+$("#f-cancel").addEventListener("click", resetForm);
+$("#btn-copy").addEventListener("click", copySummary);
+$("#btn-png").addEventListener("click", exportPNG);
+$("#btn-sample").addEventListener("click", () => {
+  if (state.items.length && !confirm("目前已有資料，改用範例資料會覆蓋現有內容，確定嗎？")) return;
+  loadSample(); toast("已載入範例資料（溫泉小旅行）");
+});
+$("#btn-clear").addEventListener("click", () => {
+  if (!confirm("確定要清除所有成員與品項資料？")) return;
+  state = { members: [], items: [] }; resetForm(); commit(); toast("已全部清除");
+});
+$("#fab").addEventListener("click", () => $("#summary-panel").scrollIntoView({ behavior: "smooth" }));
+
+function loadSample() {
+  const m = ["小明", "小美", "阿豪", "小華"].map(n => ({ id: uid(), name: n }));
+  const id = Object.fromEntries(m.map(x => [x.name, x.id]));
+  state = {
+    members: m,
+    items: [
+      { id: uid(), name: "溫泉會館住宿一晚", amount: 4800, payerCustom: false, payers: [{ mid: id["小明"], amount: null }], shares: { mode: "equal", list: m.map(x => ({ mid: x.id })) } },
+      { id: uid(), name: "晚餐（海鮮合菜）", amount: 3600, payerCustom: false, payers: [{ mid: id["小美"], amount: null }], shares: { mode: "equal", list: m.map(x => ({ mid: x.id })) } },
+      { id: uid(), name: "租車油資+過路費", amount: 1200, payerCustom: true, payers: [{ mid: id["阿豪"], amount: 800 }, { mid: id["小華"], amount: 400 }], shares: { mode: "weight", list: [{ mid: id["小明"], val: 2 }, { mid: id["小美"], val: 1 }, { mid: id["阿豪"], val: 1 }, { mid: id["小華"], val: 2 }] } },
+      { id: uid(), name: "早餐（兩人先付）", amount: 640, payerCustom: false, payers: [{ mid: id["小明"], amount: null }, { mid: id["小美"], amount: null }], shares: { mode: "percent", list: [{ mid: id["小明"], val: 40 }, { mid: id["小美"], val: 30 }, { mid: id["阿豪"], val: 20 }, { mid: id["小華"], val: 10 }] } },
+    ]
+  };
+  resetForm(); commit();
+}
+function commit() { saveState(); renderAll(); }
+function renderAll() { renderMembers(); renderItems(); renderSummary(); if (!editingId) renderFormPickers(); }
+
+/* ========= 啟動 ========= */
+const saved = loadState();
+if (saved) state = saved;
+if (!state.members.length && !state.items.length) loadSample(); // 首次進入給範例
+else { resetForm(); commit(); }
+renderAll();
+</script>
+</body>
+</html>
